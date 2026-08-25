@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" 
+	xmlns:wsc="http://www.mulesoft.org/schema/mule/wsc"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/wsc http://www.mulesoft.org/schema/mule/wsc/current/mule-wsc.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="13f014da-52f5-41c7-9bcf-c69788544c0a" >
+		<http:request-connection host="localhost" port="7071" />
+	</http:request-config>
+
+	<wsc:config name="Web_Service_Consumer_Config" doc:name="Web Service Consumer Config" doc:id="21a16653-ec10-47c7-a233-6d744bdd84db" >
+		<wsc:connection wsdlLocation="products.wsdl" service="ProductServicePortService" port="ProductServicePortSoap11" address="http://localhost:6060/ws" />
+	</wsc:config>
+
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="a1744e7e-d3bc-4471-907b-5e736b5c0eb6" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="Eshaan@43" database="librarydb" />
+	</db:config>
+
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="404b4ca6-707a-4e64-9297-152e859bf7da" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+
+	<flow name="mainflow" doc:id="5576fec0-7689-48e3-8e6a-e82e8b28982a">
+		<http:listener doc:name="Listener" doc:id="d3618100-48c0-4a30-9fa7-01bb380c016b" config-ref="HTTP_Listener_config" path="/library/dashboard"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="a4de5028-b83a-46b6-af26-67f5e22ef726" >
+			<route >
+				<flow-ref doc:name="Flow Reference" doc:id="9c5131a4-317b-493e-91b4-1d702c159ea6" name="getBooks"/>
+			</route>
+			<route >
+				<flow-ref doc:name="Flow Reference" doc:id="60b6eb1b-4c42-46bb-baa4-6106f6b9a5b8" name="getMembers"/>
+			</route>
+			<route >
+				<flow-ref doc:name="Flow Reference" doc:id="461e5457-91ff-42af-8d13-f119261982e9" name="getLoans"/>
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Transform Message" doc:id="093b30bb-a0a6-4813-88c6-30ecb6c85f62" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+var books   = (payload."0".payload) default []
+// Route 1 returns a SOAP structure: envelope body containing elements
+var rawSoap = payload."1".payload.body
+var members = (rawSoap..*products default rawSoap..*product default [rawSoap]) default []
+var loans   = (payload."2".payload) default []
+---
+{
+    summary: {
+        totalBooks: sizeOf(books),
+        totalMembers: sizeOf(members),
+        totalLoans: sizeOf(loans)
+    },
+    libraryFeed: flatten([
+        books map (b) -> { 'type': "book", (b) },
+        members map (m) -> { 'type': "member", (m) },
+        loans map (l) -> { 'type': "loan", (l) }
+    ])
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+
+	<flow name="getBooks" doc:id="554e22e7-d0bc-482a-b460-a25a6ffcb579" >
+		<http:request method="GET" doc:name="Request" doc:id="958626cc-3840-4d97-b90c-8d18e84001a1" config-ref="HTTP_Request_configuration" path="/rest/products"/>
+	</flow>
+
+	<flow name="getMembers" doc:id="de9caa0b-24ae-4ff0-85d0-5aa1b6964f4d" >
+		<ee:transform doc:name="Transform Message" doc:id="e158db58-0d14-4f5f-aa57-810543e70fd4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+ns dom http://example.com/productservicesoap
+---
+dom#getAllProductsRequest: null]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<wsc:consume doc:name="Consume" doc:id="77ccbb96-1880-4e20-ba51-cbc926d81264" config-ref="Web_Service_Consumer_Config" operation="getAllProducts"/>
+	</flow>
+
+	<flow name="getLoans" doc:id="e71a9b21-71c1-43d1-8d21-b6794ef89c94" >
+		<db:select doc:name="Select" doc:id="20e7ff3c-d6a8-4260-b5cb-c92e491cbc41" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM loan]]></db:sql>
+		</db:select>
+	</flow>
+</mule>
