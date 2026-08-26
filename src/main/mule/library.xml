@@ -46,24 +46,8 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
-
-var books   = (payload."0".payload) default []
-var rawSoap = payload."1".payload.body
-var members = (rawSoap..*products default rawSoap..*product default [rawSoap]) default []
-var loans   = (payload."2".payload) default []
 ---
-{
-    summary: {
-        totalBooks: sizeOf(books),
-        totalMembers: sizeOf(members),
-        totalLoans: sizeOf(loans)
-    },
-    libraryFeed: flatten([
-        books map (b) -> { 'type': "book", (b) },
-        members map (m) -> { 'type': "member", (m) },
-        loans map (l) -> { 'type': "loan", (l) }
-    ])
-}]]></ee:set-payload>
+flatten(payload..payload)]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 	</flow>
