@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:wsc="http://www.mulesoft.org/schema/mule/wsc"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/wsc http://www.mulesoft.org/schema/mule/wsc/current/mule-wsc.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+	<!--
+		Drop this file into src/test/munit/ (replacing or alongside munit-test.xml).
+		Run with: mvn clean test -Dmunit.test=library-test
+		These tests mock every external dependency (HTTP, SOAP, DB) so nothing
+		needs to actually be running on localhost to execute the suite.
+	-->
+
+	<munit:config name="library-test.xml" minMuleVersion="4.4.0" />
+
+	<!-- ============================================================
+	     TEST 1 - getBooks: mocks the outbound REST call
+	     ============================================================ -->
+	<munit:test name="getBooks-returns-product-list" doc:id="a1b2c3d4-0001" description="Verifies getBooks flow passes through the REST response payload unchanged">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock HTTP Request" processor="http:request">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration" attributeName="config-ref"/>
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;id&quot;: 1, &quot;title&quot;: &quot;Clean Code&quot;}, {&quot;id&quot;: 2, &quot;title&quot;: &quot;Refactoring&quot;}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+
+		<munit:execution>
+			<flow-ref doc:name="Call getBooks" name="getBooks"/>
+		</munit:execution>
+
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert payload is an array of size 2" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(2)]"/>
+			<munit-tools:assert-that doc:name="Assert first title" expression="#[payload[0].title]" is="#[MunitTools::equalTo(&apos;Clean Code&apos;)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<!-- ============================================================
+	     TEST 2 - getMembers: mocks the SOAP consume operation
+	     ============================================================ -->
+	<munit:test name="getMembers-returns-member-list" doc:id="a1b2c3d4-0002" description="Verifies getMembers builds the SOAP request and passes through the WSC response">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock WSC Consume" processor="wsc:consume">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="getAllProducts" attributeName="operation"/>
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;memberId&quot;: 101, &quot;name&quot;: &quot;Riyaz&quot;}, {&quot;memberId&quot;: 102, &quot;name&quot;: &quot;Ayesha&quot;}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+
+		<munit:execution>
+			<flow-ref doc:name="Call getMembers" name="getMembers"/>
+		</munit:execution>
+
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert payload is an array of size 2" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(2)]"/>
+			<munit-tools:assert-that doc:name="Assert first member name" expression="#[payload[0].name]" is="#[MunitTools::equalTo(&apos;Riyaz&apos;)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<!-- ============================================================
+	     TEST 3 - getLoans: mocks the DB select
+	     ============================================================ -->
+	<munit:test name="getLoans-returns-loan-rows" doc:id="a1b2c3d4-0003" description="Verifies getLoans returns rows from the DB select as-is">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock DB Select" processor="db:select">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;loanId&quot;: 1, &quot;bookId&quot;: 1, &quot;memberId&quot;: 101}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+
+		<munit:execution>
+			<flow-ref doc:name="Call getLoans" name="getLoans"/>
+		</munit:execution>
+
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert one loan record" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(1)]"/>
+			<munit-tools:assert-that doc:name="Assert loanId" expression="#[payload[0].loanId]" is="#[MunitTools::equalTo(1)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<!-- ============================================================
+	     TEST 4 - mainflow (happy path): mocks all three sub-flows
+	     underlying connectors and verifies the Scatter-Gather output
+	     is correctly flattened into a single JSON array.
+	     ============================================================ -->
+	<munit:test name="mainflow-flattens-all-three-sources" doc:id="a1b2c3d4-0004" description="Verifies the dashboard endpoint aggregates books, members, and loans into one flattened array">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock HTTP Request (books)" processor="http:request">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;id&quot;: 1, &quot;title&quot;: &quot;Clean Code&quot;}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+
+			<munit-tools:mock-when doc:name="Mock WSC Consume (members)" processor="wsc:consume">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;memberId&quot;: 101, &quot;name&quot;: &quot;Riyaz&quot;}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+
+			<munit-tools:mock-when doc:name="Mock DB Select (loans)" processor="db:select">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;loanId&quot;: 1, &quot;bookId&quot;: 1, &quot;memberId&quot;: 101}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+
+		<munit:execution>
+			<flow-ref doc:name="Call mainflow" name="mainflow"/>
+		</munit:execution>
+
+		<munit:validation>
+			<!-- flatten(payload..payload) over 3 routes each returning a 1-element array -> 3 total elements -->
+			<munit-tools:assert-that doc:name="Assert flattened array has 3 elements" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(3)]"/>
+			<munit-tools:assert-that doc:name="Assert a book is present in the flattened result" expression="#[payload[?($.title == &apos;Clean Code&apos;)][0].title]" is="#[MunitTools::equalTo(&apos;Clean Code&apos;)]"/>
+			<munit-tools:assert-that doc:name="Assert a member is present in the flattened result" expression="#[payload[?($.name == &apos;Riyaz&apos;)][0].name]" is="#[MunitTools::equalTo(&apos;Riyaz&apos;)]"/>
+			<munit-tools:assert-that doc:name="Assert a loan is present in the flattened result" expression="#[payload[?($.loanId == 1)][0].loanId]" is="#[MunitTools::equalTo(1)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<!-- ============================================================
+	     TEST 5 - mainflow (failure path): one of the three parallel
+	     routes throws an error. By default, Mule Scatter-Gather
+	     fails the WHOLE flow if any single route errors - this test
+	     documents and asserts that current (unhandled) behavior,
+	     which is worth discussing as a known gap/improvement:
+	     the flow has no error handler, so a single flaky dependency
+	     (e.g. the SOAP member service being down) takes down the
+	     entire dashboard endpoint instead of degrading gracefully.
+	     ============================================================ -->
+	<munit:test name="mainflow-fails-when-one-route-errors" doc:id="a1b2c3d4-0005" description="Documents that a single failing route (SOAP down) currently fails the entire Scatter-Gather with no partial/degraded response">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock HTTP Request (books) - OK" processor="http:request">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;id&quot;: 1, &quot;title&quot;: &quot;Clean Code&quot;}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+
+			<munit-tools:mock-when doc:name="Mock WSC Consume (members) - FAILS" processor="wsc:consume">
+				<munit-tools:then-throw class="java.lang.RuntimeException">
+					<munit-tools:with-message value="Simulated SOAP member service outage"/>
+				</munit-tools:then-throw>
+			</munit-tools:mock-when>
+
+			<munit-tools:mock-when doc:name="Mock DB Select (loans) - OK" processor="db:select">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{&quot;loanId&quot;: 1, &quot;bookId&quot;: 1, &quot;memberId&quot;: 101}]]" mediaType="application/json"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+
+		<munit:execution>
+			<try doc:name="Try">
+				<flow-ref doc:name="Call mainflow" name="mainflow"/>
+				<error-handler>
+					<on-error-continue doc:name="Expected: Scatter-Gather aggregates the error" type="MULE:COMPOSITE_ROUTING">
+						<munit-tools:store doc:name="Store the composite error" key="caughtError">
+							<munit-tools:value>#[error]</munit-tools:value>
+						</munit-tools:store>
+					</on-error-continue>
+				</error-handler>
+			</try>
+		</munit:execution>
+
+		<munit:validation>
+			<munit-tools:retrieve doc:name="Retrieve caught error" key="caughtError" target="caughtError"/>
+			<munit-tools:assert-that doc:name="Assert an error was actually thrown" expression="#[vars.caughtError]" is="#[MunitTools::notNullValue()]"/>
+			<munit-tools:assert-that doc:name="Assert it is a COMPOSITE_ROUTING error (Scatter-Gather failed as a whole)" expression="#[vars.caughtError.errorType.identifier]" is="#[MunitTools::equalTo(&apos;COMPOSITE_ROUTING&apos;)]"/>
+		</munit:validation>
+	</munit:test>
+
+</mule>

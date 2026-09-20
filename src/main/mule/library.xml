@@ -22,7 +22,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	</wsc:config>
 
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="a1744e7e-d3bc-4471-907b-5e736b5c0eb6" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="Eshaan@43" database="librarydb" />
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" />
 	</db:config>
 
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="404b4ca6-707a-4e64-9297-152e859bf7da" >
